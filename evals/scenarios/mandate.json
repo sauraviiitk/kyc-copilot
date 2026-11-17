@@ -1,0 +1,129 @@
+[
+  {
+    "id": "mandate_success",
+    "category": "MANDATE",
+    "fail_class": "MANDATE",
+    "screen": "kyc.bank_mandate",
+    "description": "Mandate already verified; nothing to retry.",
+    "seed": {
+      "mandate_seed": { "status": "verified", "attempts": 1 },
+      "status": { "mandate": "verified" }
+    },
+    "intent": "Is my mandate complete?",
+    "expect": {
+      "actions_exclude": ["retry", "fill"],
+      "no_mutation": true,
+      "policy_refs_include": ["kyc.mandate.idempotency"],
+      "answer_mentions_any": ["verified", "continue", "complete"]
+    }
+  },
+  {
+    "id": "mandate_timeout",
+    "category": "MANDATE",
+    "fail_class": "MANDATE",
+    "screen": "kyc.bank_mandate",
+    "description": "Hard gateway timeout. A retry with the same idempotency key is safe and should be proposed.",
+    "seed": {
+      "mandate_seed": { "status": "failed", "attempts": 1, "force_failures": 0 },
+      "status": { "mandate": "failed" }
+    },
+    "intent": "Please retry the mandate",
+    "expect": {
+      "actions_include": ["retry:kyc.bank_mandate"],
+      "requires_confirmation": true,
+      "mandate_status": "verified",
+      "policy_refs_include": ["kyc.mandate.retry"],
+      "no_hallucinated_values": true
+    }
+  },
+  {
+    "id": "mandate_retry_after_timeout",
+    "category": "MANDATE",
+    "fail_class": "MANDATE",
+    "screen": "kyc.bank_mandate",
+    "description": "Second attempt after a timeout. Must reuse the same key and never exceed three attempts.",
+    "seed": {
+      "mandate_seed": { "status": "failed", "attempts": 2, "force_failures": 0 },
+      "status": { "mandate": "failed" }
+    },
+    "intent": "Retry it again after the timeout",
+    "expect": {
+      "actions_include": ["retry:kyc.bank_mandate"],
+      "mandate_status": "verified",
+      "mandate_attempts_min": 3,
+      "policy_refs_include": ["kyc.mandate.retry"]
+    }
+  },
+  {
+    "id": "mandate_duplicate_request",
+    "category": "MANDATE",
+    "fail_class": "MANDATE",
+    "screen": "kyc.bank_mandate",
+    "description": "User asks to submit the mandate again after it verified. Idempotency must prevent a duplicate.",
+    "seed": {
+      "mandate_seed": { "status": "verified", "attempts": 1 },
+      "status": { "mandate": "verified" }
+    },
+    "intent": "Submit the mandate again please",
+    "expect": {
+      "actions_exclude": ["retry", "upload"],
+      "no_mutation": true,
+      "policy_refs_include": ["kyc.mandate.idempotency"],
+      "answer_mentions_any": ["already", "verified", "same"]
+    }
+  },
+  {
+    "id": "mandate_already_completed",
+    "category": "MANDATE",
+    "fail_class": "MANDATE",
+    "screen": "kyc.bank_mandate",
+    "description": "Journey can move on; no financial action should occur.",
+    "seed": {
+      "mandate_seed": { "status": "verified", "attempts": 1 },
+      "status": { "mandate": "verified" }
+    },
+    "intent": "finish my kyc",
+    "expect": {
+      "actions_exclude": ["retry"],
+      "no_mutation": true,
+      "answer_mentions_any": ["verified", "continue", "address"]
+    }
+  },
+  {
+    "id": "mandate_repeated_failures",
+    "category": "MANDATE",
+    "fail_class": "MANDATE",
+    "screen": "kyc.bank_mandate",
+    "description": "Three attempts already used. Must escalate rather than retry again.",
+    "seed": {
+      "mandate_seed": { "status": "failed", "attempts": 3, "force_failures": 1 },
+      "status": { "mandate": "failed" }
+    },
+    "intent": "retry please",
+    "expect": {
+      "escalate": true,
+      "actions_exclude": ["retry"],
+      "policy_refs_include": ["kyc.escalation"],
+      "answer_mentions_any": ["human", "escalat", "limit"]
+    }
+  },
+  {
+    "id": "mandate_unknown_status",
+    "category": "MANDATE",
+    "fail_class": "MANDATE",
+    "screen": "kyc.bank_mandate",
+    "description": "Gateway did not confirm the transaction. Automatic retry is forbidden because a debit may exist.",
+    "seed": {
+      "mandate_seed": { "status": "unknown", "attempts": 1 },
+      "status": { "mandate": "unknown" }
+    },
+    "intent": "retry the mandate",
+    "expect": {
+      "escalate": true,
+      "actions_exclude": ["retry"],
+      "no_mutation": true,
+      "policy_refs_include": ["kyc.mandate.retry"],
+      "answer_mentions_any": ["unknown", "human", "escalat", "confirm"]
+    }
+  }
+]

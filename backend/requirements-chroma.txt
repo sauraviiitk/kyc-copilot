@@ -1,0 +1,4 @@
+# Optional: enables the ChromaDB-backed policy index.
+# Without it the app uses the deterministic local retriever (same documents,
+# same refs). POLICY_BACKEND=auto picks whichever is available.
+chromadb>=0.5,<2

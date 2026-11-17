@@ -1,0 +1,90 @@
+[
+  {
+    "ref": "kyc.pan.format",
+    "title": "PAN format and case normalisation",
+    "category": "pan",
+    "version": "1.2",
+    "tags": ["pan", "format", "uppercase", "validation", "lowercase"],
+    "content": "A PAN is exactly 10 characters: five uppercase letters, four digits and one uppercase letter (pattern ^[A-Z]{5}[0-9]{4}[A-Z]$). Lowercase letters are a formatting defect only. When the current value has the correct characters in the correct positions and differs solely by letter case, the assistant may normalise it to uppercase. The assistant must never add, remove, reorder or guess characters. A value that is shorter or longer than 10 characters, or that contains characters outside the expected classes, cannot be repaired automatically and must be re-entered by the user."
+  },
+  {
+    "ref": "kyc.pan.verification",
+    "title": "PAN verification and attempt limits",
+    "category": "pan",
+    "version": "1.1",
+    "tags": ["pan", "verification", "attempts", "confirmation", "consent"],
+    "content": "PAN verification is a sensitive submission. The assistant may pre-fill the corrected PAN after explaining the change, but it must not trigger verification on the user's behalf without explicit confirmation. A maximum of three verification attempts are allowed per journey. After three failed attempts the case must be escalated to a human reviewer. If a PAN has already been verified it becomes read-only; a request to change a verified PAN must be escalated to human support."
+  },
+  {
+    "ref": "kyc.document.quality",
+    "title": "Identity document quality gates",
+    "category": "document",
+    "version": "1.3",
+    "tags": ["ocr", "quality", "blur", "rotation", "confidence", "document"],
+    "content": "An identity document is accepted only when the OCR confidence is at least 0.85, the blur score is at least 0.60, the rotation is within 5 degrees either way, and the file is a JPG, PNG or PDF. Documents below any threshold are rejected or marked needs_review together with the failed checks. Low-confidence OCR output is never used to populate identity fields, and the assistant must not read, guess or complete numbers from a low-confidence document. Re-uploading requires an explicit user action; the assistant may recommend it but must not silently replace a document."
+  },
+  {
+    "ref": "kyc.document.retry",
+    "title": "Document re-upload retry policy",
+    "category": "document",
+    "version": "1.0",
+    "tags": ["retry", "upload", "document", "limits"],
+    "content": "A document may be re-uploaded at most three times. Retries are only permitted for documents that were rejected for quality reasons, and each retry creates a new document reference instead of overwriting the previous one. If three uploads have failed, or if the document is unreadable, the assistant must escalate to a human reviewer. Duplicate uploads of the same accepted document must not create a second verification record."
+  },
+  {
+    "ref": "kyc.mandate.idempotency",
+    "title": "Bank mandate idempotency",
+    "category": "mandate",
+    "version": "1.2",
+    "tags": ["mandate", "idempotency", "duplicate", "bank", "account"],
+    "content": "Every mandate submission carries a client-supplied idempotency key. A repeated request with the same key returns the original mandate reference and result and must never create a second mandate or a second debit instruction. A journey may have at most one active mandate. If a mandate is already verified, further submissions return the existing record."
+  },
+  {
+    "ref": "kyc.mandate.retry",
+    "title": "Bank mandate retry and timeout handling",
+    "category": "mandate",
+    "version": "1.4",
+    "tags": ["mandate", "retry", "timeout", "failure", "unknown", "escalation"],
+    "content": "Bank mandate calls can time out. A timeout with no confirmed result leaves the mandate in an unknown state. Automatic retries are limited to two and always reuse the same idempotency key. Retrying is safe only when the previous attempt returned a hard failure (for example a gateway timeout with a failed status). When the transaction status is unknown the assistant must not retry automatically: it must escalate to a human operator because a debit may already exist. Financial operations always require explicit user confirmation before any retry."
+  },
+  {
+    "ref": "kyc.address.validation",
+    "title": "Address and PIN validation",
+    "category": "address",
+    "version": "1.1",
+    "tags": ["address", "pin", "pincode", "city", "state", "suggestion"],
+    "content": "The PIN code is six digits and may not start with zero. City and state must be consistent with each other. The assistant may propose a city or state from the suggestion list that is displayed on screen, and may remove spaces or hyphens from a PIN code. The assistant must never invent or alter a house number, street or any part of the user's actual residential address; those values must come from the user. Address verification is a sensitive submission and requires explicit user confirmation."
+  },
+  {
+    "ref": "kyc.escalation",
+    "title": "Human escalation triggers",
+    "category": "policy",
+    "version": "1.2",
+    "tags": ["escalation", "human", "support", "handoff", "unknown"],
+    "content": "Escalate to a human reviewer when: the relevant policy cannot be retrieved; the allowed retry count is exhausted; a financial transaction has an unknown status; a verified identifier must be changed; the user explicitly asks for a human; the user asks to bypass or skip KYC; or the assistant cannot resolve the issue with the tools it is permitted to use. An escalation record must contain a reason and must not contain raw identity numbers."
+  },
+  {
+    "ref": "kyc.consent",
+    "title": "Consent before sensitive actions",
+    "category": "policy",
+    "version": "1.1",
+    "tags": ["consent", "confirmation", "sensitive", "submit", "privacy"],
+    "content": "The assistant may highlight fields and pre-fill values derived from the user's own input, but submitting a PAN, accepting a document extraction, submitting a bank mandate or verifying an address always requires the user's explicit confirmation. The user's request to 'just finish it' is not consent to submit financial or identity data without review. Sensitive values are tokenised before being sent to any external model and are rehydrated only at execution time."
+  },
+  {
+    "ref": "kyc.bypass",
+    "title": "Prohibited shortcuts and out-of-scope requests",
+    "category": "policy",
+    "version": "1.0",
+    "tags": ["bypass", "skip", "fraud", "out-of-scope", "refusal"],
+    "content": "The assistant must refuse any request to skip, bypass or fake KYC verification, to use another person's identity, or to generate identity numbers. It must not provide financial, legal or tax advice, or answer questions unrelated to the KYC journey. Refusals should be brief, state the limitation, and offer the compliant next step such as fixing the field, uploading a clear document, retrying safely, or escalating to a human."
+  },
+  {
+    "ref": "kyc.data.handling",
+    "title": "PII handling and logging",
+    "category": "policy",
+    "version": "1.0",
+    "tags": ["pii", "privacy", "masking", "logs", "security"],
+    "content": "PAN, Aadhaar, bank account numbers, phone numbers, e-mail addresses and residential addresses are sensitive. They are replaced with non-reversible tokens and format-preserving surrogates before any LLM call. Raw values are never written to application logs, audit summaries or evaluation reports. The token mapping stays server side and is never exposed to the model. Values are rehydrated only inside an authorised action execution path after the action has passed permission checks."
+  }
+]

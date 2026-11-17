@@ -1,0 +1,133 @@
+"""FastAPI application entry point.
+
+    uvicorn app.main:app --reload --port 8000
+
+All secrets come from environment variables. With no LLM key configured the
+app runs the deterministic offline planner, so every feature (including the
+evaluation harness) is usable offline.
+"""
+
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.api import (
+    routes_agent,
+    routes_audit,
+    routes_eval,
+    routes_kyc,
+    routes_screen,
+    routes_sessions,
+    routes_system,
+)
+from app.core.config import settings
+from app.core.logging import configure_logging, get_logger
+from app.db.base import Base
+from app.db.seed import seed_all
+from app.db.session import engine
+
+configure_logging()
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if settings.auto_create_schema:
+        Base.metadata.create_all(engine)
+        from app.db.session import SessionLocal
+
+        with SessionLocal() as db:
+            seed_all(db)
+            db.commit()
+        logger.info("app.schema.ready mode=create_all")
+    else:
+        logger.info("app.schema.ready mode=alembic")
+
+    warnings = settings.validate_production()
+    for warning in warnings:
+        logger.warning("app.config.warning %s", warning)
+
+    # A worker restart cannot resume an in-flight evaluation. Fail any orphaned
+    # run so the dashboard stops polling and shows a terminal state.
+    from app.evaluation.harness import recover_orphaned_runs
+
+    recovered = recover_orphaned_runs()
+    if recovered:
+        logger.warning("app.eval.recovered_orphans count=%s", recovered)
+
+    # Prime the policy retriever once instead of on the first user request.
+    from app.services.policies import get_policy_retriever
+
+    retriever = get_policy_retriever()
+    logger.info(
+        "app.started provider=%s policy_backend=%s policies=%s",
+        settings.effective_llm_provider(),
+        retriever.backend,
+        len(retriever.documents),
+    )
+    yield
+    logger.info("app.stopped")
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version="1.0.0",
+    description=(
+        "KYC Copilot: live screen context, guarded tool execution, PII tokenisation "
+        "and a prompt-version evaluation harness. All external integrations are simulated."
+    ),
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+for router in (
+    routes_system.router,
+    routes_sessions.router,
+    routes_screen.router,
+    routes_agent.router,
+    routes_kyc.router,
+    routes_audit.router,
+    routes_eval.router,
+):
+    app.include_router(router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("app.unhandled path=%s", request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": {
+                "code": "internal_error",
+                "message": "The copilot hit an unexpected error. Nothing was changed.",
+            }
+        },
+    )
+
+
+@app.get("/", tags=["system"])
+def root() -> dict[str, Any]:
+    return {
+        "name": settings.app_name,
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health",
+        "evaluation": "/api/eval/runs",
+        "simulated": True,
+    }
