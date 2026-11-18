@@ -9,14 +9,31 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 
+
+def ensure_sqlite_directory(database_url: str) -> None:
+    """Create the parent directory for a file-backed SQLite database.
+
+    SQLite will not create missing directories. The default database lives in
+    ./data, which is gitignored, so a fresh checkout (CI, Render, Docker without
+    a volume) has no such directory and connecting fails with
+    "unable to open database file".
+    """
+    database_file = make_url(database_url).database
+    if database_file and database_file != ":memory:" and not database_file.startswith("file:"):
+        Path(database_file).expanduser().parent.mkdir(parents=True, exist_ok=True)
+
+
 _engine_kwargs: dict = {"pool_pre_ping": True, "future": True}
 if settings.is_sqlite:
+    ensure_sqlite_directory(settings.database_url)
     _engine_kwargs["connect_args"] = {"check_same_thread": False}
 else:
     # Supabase's transaction pooler (port 6543) is PgBouncer in transaction

@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -73,6 +74,11 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _normalise_db_url(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            # An empty dashboard value (common on Render/Vercel UIs) should
+            # behave like the documented local default, not crash the app.
+            return "sqlite:///./data/kyc_copilot.db"
         # Supabase / Heroku hand out postgres:// or postgresql://; SQLAlchemy
         # needs the driver-qualified URL.
         if value.startswith("postgres://"):
@@ -84,6 +90,20 @@ class Settings(BaseSettings):
     @property
     def is_sqlite(self) -> bool:
         return self.database_url.startswith("sqlite")
+
+    @property
+    def database_host(self) -> str:
+        """Hostname for logs (never includes the username or password)."""
+        try:
+            return make_url(self.database_url).host or "local"
+        except Exception:
+            return "invalid-url"
+
+    @property
+    def database_url_is_placeholder(self) -> bool:
+        """True when the example connection string from .env.example was used."""
+        lowered = self.database_url.lower()
+        return any(marker in lowered for marker in ("<region>", "<ref>", "<password>", "<host>"))
 
     @property
     def cors_origin_list(self) -> list[str]:

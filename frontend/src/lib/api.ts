@@ -13,8 +13,24 @@ import type {
   SessionResponse,
 } from "./types";
 
+export const API_ORIGIN = (() => {
+  const configured = (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "");
+  // Accept either https://api.example.com or https://api.example.com/api so the
+  // existing Docker build arg keeps working.
+  return configured.endsWith("/api") ? configured.slice(0, -"/api".length) : configured;
+})();
+
+const API_ROOT = API_ORIGIN ? `${API_ORIGIN}/api` : "/api";
+const HEALTH_URL = API_ORIGIN ? `${API_ORIGIN}/health` : "/health";
+
+/** Turn a backend-relative path (for example an SSE stream_url) into an absolute URL. */
+export function apiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_ORIGIN}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export const api = axios.create({
-  baseURL: "/api",
+  baseURL: API_ROOT,
   timeout: 30000,
   headers: { "Content-Type": "application/json" },
 });
@@ -30,7 +46,7 @@ export function errorMessage(error: unknown): string {
 }
 
 export async function fetchHealth(): Promise<HealthResponse> {
-  const { data } = await axios.get<HealthResponse>("/health");
+  const { data } = await axios.get<HealthResponse>(HEALTH_URL);
   return data;
 }
 

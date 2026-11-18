@@ -1,0 +1,51 @@
+# Render blueprint for the KYC Copilot FastAPI backend.
+#
+# Deploy with: Render Dashboard -> New -> Blueprint -> select this repository.
+# `sync: false` values are requested in the dashboard and are never committed.
+#
+# IMPORTANT: DATABASE_URL must be the real Supabase/Postgres connection string
+# from your provider dashboard. Do NOT paste the placeholder shown in
+# .env.example (it contains "<region>" / "<password>" and cannot resolve).
+services:
+  - type: web
+    name: kyc-copilot-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: AUTO_CREATE_SCHEMA
+        value: "true"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      # Supabase session-pooler example:
+      # postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      # Set to your deployed frontend origin(s), comma separated, e.g.
+      # https://your-app.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+      - key: LLM_PROVIDER
+        value: auto
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: POLICY_BACKEND
+        value: local
+      - key: REDIS_URL
+        value: ""
+      - key: LOG_LEVEL
+        value: INFO

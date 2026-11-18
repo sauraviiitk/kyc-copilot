@@ -15,6 +15,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 
 from app.api import (
     routes_agent,
@@ -37,8 +38,26 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if settings.database_url_is_placeholder:
+        raise RuntimeError(
+            "DATABASE_URL still contains the placeholder example from .env.example "
+            "(for example '<region>' or '<password>'). Set the real Supabase/Postgres "
+            "connection string in your hosting provider's environment variables, or "
+            "remove DATABASE_URL entirely to run on local SQLite."
+        )
+
     if settings.auto_create_schema:
-        Base.metadata.create_all(engine)
+        try:
+            Base.metadata.create_all(engine)
+        except OperationalError as exc:
+            logger.error(
+                "app.database.unavailable host=%s error=%s. Check DATABASE_URL "
+                "(host, project ref, password, sslmode=require) and that the database "
+                "is reachable from this environment.",
+                settings.database_host,
+                exc.orig,
+            )
+            raise
         from app.db.session import SessionLocal
 
         with SessionLocal() as db:

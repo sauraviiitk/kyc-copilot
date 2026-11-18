@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import {
+  apiUrl,
   errorMessage,
   fetchActionValue,
   fetchHealth,
@@ -286,7 +287,7 @@ export function CopilotPanel({ contextReady }: { contextReady: boolean }) {
       });
       runIdRef.current = run.run_id;
       sourceRef.current?.close();
-      const source = new EventSource(run.stream_url);
+      const source = new EventSource(apiUrl(run.stream_url));
       sourceRef.current = source;
       for (const name of EVENT_NAMES) {
         source.addEventListener(name, (event) => {
