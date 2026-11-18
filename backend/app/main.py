@@ -38,12 +38,32 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    logger.info(
+        "app.config.database source=%s host=%s placeholder=%s",
+        settings.database_url_source,
+        settings.database_host,
+        settings.database_url_is_placeholder,
+    )
+
     if settings.database_url_is_placeholder:
         raise RuntimeError(
             "DATABASE_URL still contains the placeholder example from .env.example "
-            "(for example '<region>' or '<password>'). Set the real Supabase/Postgres "
-            "connection string in your hosting provider's environment variables, or "
-            "remove DATABASE_URL entirely to run on local SQLite."
+            f"(read from: {settings.database_url_source}, host: {settings.database_host}). "
+            "Set the real Supabase/Postgres connection string in your hosting "
+            "provider's environment variables, or remove DATABASE_URL entirely to "
+            "run on local SQLite. If you already edited the dashboard variable, "
+            "check for a duplicate variable, an environment group, or a .env "
+            "secret file overriding it."
+        )
+
+    if settings.database_host.endswith(".supabase.co"):
+        logger.warning(
+            "app.config.database host=%s is the Supabase direct endpoint, which is "
+            "IPv6-only unless the project has the IPv4 add-on. Networks without "
+            "IPv6 egress (Render, most CI runners) must use the shared pooler: "
+            "aws-<n>-<region>.pooler.supabase.com with user postgres.<project-ref> "
+            "on port 5432 (session) or 6543 (transaction).",
+            settings.database_host,
         )
 
     if settings.auto_create_schema:

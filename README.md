@@ -227,15 +227,25 @@ The repository includes a Render blueprint (`render.yaml`), a Vercel config
    `render.yaml`, uses `backend/` as the root and Python 3.12.
 2. Set `DATABASE_URL` to the **real** connection string from your Supabase
    project (Project Settings → Database → Connection string → URI). Use the
-   session pooler on port `6543` and keep `sslmode=require`:
+   shared pooler, not the `db.<project-ref>.supabase.co` direct endpoint:
+   that host is IPv6-only on the free plan, and Render has no IPv6 egress, so
+   it fails with `Network is unreachable`. The pooler is IPv4-only on every
+   plan:
 
    ```text
-   postgresql://postgres.<project-ref>:<real-password>@aws-0-<real-region>.pooler.supabase.com:6543/postgres?sslmode=require
+   postgresql://postgres.<project-ref>:<real-password>@aws-<n>-<region>.pooler.supabase.com:5432/postgres?sslmode=require
    ```
+
+   Port `5432` is session mode (supports prepared statements, recommended for
+   a long-running backend). Port `6543` is transaction mode; it works but
+   needs prepared statements disabled (`?sslmode=require&prepare_threshold=0`).
+   The pooler username must be `postgres.<project-ref>` — the plain `postgres`
+   user only works for direct connections.
 
    Do **not** paste the placeholder from `.env.example`: a host containing
    `<region>` cannot be resolved and the app now fails with an explicit message
-   instead of a DNS error.
+   instead of a DNS error. Percent-encode reserved characters in the password
+   (for example `@` → `%40`).
 3. Set `CORS_ORIGINS` to your frontend origin, for example
    `https://your-app.vercel.app`. Multiple origins are comma separated.
 4. (Optional) Set `GEMINI_API_KEY` for the live planner. Leave it empty to keep
@@ -249,6 +259,32 @@ creates tables and seeds policies on first boot.
 If you do not set `DATABASE_URL` at all, the backend uses SQLite inside the
 service. That deploys successfully, but Render's filesystem is ephemeral, so data
 is lost on every redeploy. Use Supabase/Postgres for persistence.
+
+#### "DATABASE_URL still contains the placeholder" on startup
+
+The log line before the error names the source and host, for example:
+
+```text
+app.config.database source=environment variable host=aws-0-<region>.pooler.supabase.com placeholder=True
+```
+
+- `source=environment variable` — a variable is set in the dashboard. Open the
+  service's **Environment** tab, delete the placeholder, and re-add the real URI.
+  Also check **Linked environment groups** and any duplicate `DATABASE_URL`
+  entry; the last one wins.
+- `source=.env file` — a `.env` **Secret File** is mounted into the container.
+  Delete it under the service's **Secret Files** tab, or make it match the real
+  URI. A real dashboard variable always takes precedence over a `.env` file.
+- `source=built-in default` — no variable reached the process at all; the
+  variable was probably added to a different service or environment.
+
+Editing an environment variable requires a new deploy before it is visible to
+the running container.
+
+`Network is unreachable` while the client reports an address starting with
+`2406:` means the direct `db.<project-ref>.supabase.co` endpoint was used;
+switch to the pooler host and `postgres.<project-ref>` username as described
+above.
 
 ### Frontend on Vercel
 

@@ -7,6 +7,7 @@ implementation so the whole product runs offline for review and CI.
 from __future__ import annotations
 
 import hashlib
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -17,6 +18,8 @@ from sqlalchemy.engine import make_url
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
+
+DEFAULT_DATABASE_URL = "sqlite:///./data/kyc_copilot.db"
 
 
 class Settings(BaseSettings):
@@ -34,7 +37,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-only-secret-key-change-me-please-32"
     admin_token: str = "dev-admin-token"
 
-    database_url: str = "sqlite:///./data/kyc_copilot.db"
+    database_url: str = DEFAULT_DATABASE_URL
 
     redis_url: str | None = "redis://localhost:6379/0"
 
@@ -78,7 +81,7 @@ class Settings(BaseSettings):
         if not value:
             # An empty dashboard value (common on Render/Vercel UIs) should
             # behave like the documented local default, not crash the app.
-            return "sqlite:///./data/kyc_copilot.db"
+            return DEFAULT_DATABASE_URL
         # Supabase / Heroku hand out postgres:// or postgresql://; SQLAlchemy
         # needs the driver-qualified URL.
         if value.startswith("postgres://"):
@@ -104,6 +107,20 @@ class Settings(BaseSettings):
         """True when the example connection string from .env.example was used."""
         lowered = self.database_url.lower()
         return any(marker in lowered for marker in ("<region>", "<ref>", "<password>", "<host>"))
+
+    @property
+    def database_url_source(self) -> str:
+        """Where DATABASE_URL came from, without revealing its value.
+
+        Hosting dashboards and stray `.env` files inside a container are both
+        plausible sources, and they are fixed in completely different places,
+        so the startup error names the one that is actually in use.
+        """
+        if "DATABASE_URL" in os.environ or "database_url" in os.environ:
+            return "environment variable"
+        if self.database_url != DEFAULT_DATABASE_URL:
+            return ".env file"
+        return "built-in default"
 
     @property
     def cors_origin_list(self) -> list[str]:
